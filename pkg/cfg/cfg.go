@@ -56,6 +56,7 @@ type config struct {
 		Claims      []string `mapstructure:"claims"`
 		AccessToken string   `mapstructure:"accesstoken"`
 		IDToken     string   `mapstructure:"idtoken"`
+		QuoteClaims bool     `mapstructure:"quoteClaims"`
 	}
 	DB struct {
 		File string `mapstructure:"file"`
@@ -81,7 +82,7 @@ type oauthConfig struct {
 	RedirectURLs    []string `mapstructure:"callback_urls"`
 	Scopes          []string `mapstructure:"scopes"`
 	UserInfoURL     string   `mapstructure:"user_info_url"`
-	PreferredDomain string   `mapstructre:"preferredDomain"`
+	PreferredDomain string   `mapstructure:"preferredDomain"`
 }
 
 // OAuthProviders holds the stings for
@@ -485,6 +486,9 @@ func SetDefaults() {
 	}
 	if !viper.IsSet(Branding.LCName + ".headers.claimheader") {
 		Cfg.Headers.ClaimHeader = "X-" + Branding.CcName + "-IdP-Claims-"
+	}
+	if !viper.IsSet(Branding.LCName + ".headers.quoteClaims") {
+		Cfg.Headers.QuoteClaims = true
 	}
 
 	// db defaults

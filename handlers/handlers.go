@@ -214,7 +214,11 @@ func ValidateRequestHandler(w http.ResponseWriter, r *http.Request) {
 					} else if val, ok := v.([]interface{}); ok {
 						strs := make([]string, len(val))
 						for i, v := range val {
-							strs[i] = fmt.Sprintf("\"%s\"", v)
+							if cfg.Cfg.Headers.QuoteClaims {
+								strs[i] = fmt.Sprintf("\"%s\"", v)
+							} else {
+								strs[i] = fmt.Sprintf("%s", v)
+							}
 						}
 						log.Debug("Adding header for claim: ", k, " Name: ", customHeader, " Value: ", strings.Join(strs, ","))
 						w.Header().Add(customHeader, strings.Join(strs, ","))
