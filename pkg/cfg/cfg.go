@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -55,6 +56,7 @@ type config struct {
 		Claims      []string `mapstructure:"claims"`
 		AccessToken string   `mapstructure:"accesstoken"`
 		IDToken     string   `mapstructure:"idtoken"`
+		QuoteClaims bool     `mapstructure:"quoteClaims"`
 	}
 	DB struct {
 		File string `mapstructure:"file"`
@@ -80,7 +82,7 @@ type oauthConfig struct {
 	RedirectURLs    []string `mapstructure:"callback_urls"`
 	Scopes          []string `mapstructure:"scopes"`
 	UserInfoURL     string   `mapstructure:"user_info_url"`
-	PreferredDomain string   `mapstructre:"preferredDomain"`
+	PreferredDomain string   `mapstructure:"preferredDomain"`
 }
 
 // OAuthProviders holds the stings for
@@ -130,13 +132,14 @@ var (
 	// RequiredOptions must have these fields set for minimum viable config
 	RequiredOptions = []string{"oauth.provider", "oauth.client_id"}
 
-	secretFile = os.Getenv("VOUCH_ROOT") + "config/secret"
+	// RootDir is where Vouch Proxy looks for ./config/config.yml, ./data, ./static and ./templates
+	RootDir string
 
+	secretFile    string
 	cmdLineConfig *string
-
-	logger *zap.Logger
-	log    *zap.SugaredLogger
-	atom   zap.AtomicLevel
+	logger        *zap.Logger
+	log           *zap.SugaredLogger
+	atom          zap.AtomicLevel
 )
 
 const (
@@ -146,14 +149,6 @@ const (
 )
 
 func init() {
-
-	// can pass loglevel on the command line
-	ll := flag.String("loglevel", "", "enable debug log output")
-	// from config file
-	port := flag.Int("port", -1, "port")
-	help := flag.Bool("help", false, "show usage")
-	cmdLineConfig = flag.String("config", "", "specify alternate .yml file as command line arg")
-	flag.Parse()
 
 	atom = zap.NewAtomicLevel()
 	encoderCfg := zap.NewProductionEncoderConfig()
@@ -168,6 +163,28 @@ func init() {
 	log = logger.Sugar()
 	Cfg.FastLogger = logger
 	Cfg.Logger = log
+
+	// can pass loglevel on the command line
+	ll := flag.String("loglevel", "", "enable debug log output")
+	// from config file
+	port := flag.Int("port", -1, "port")
+	help := flag.Bool("help", false, "show usage")
+	cmdLineConfig = flag.String("config", "", "specify alternate .yml file as command line arg")
+	flag.Parse()
+
+	// set RootDir from VOUCH_ROOT env var, or to the executable's directory
+	if os.Getenv(Branding.UCName+"_ROOT") != "" {
+		RootDir = os.Getenv(Branding.UCName + "_ROOT")
+		log.Infof("set cfg.RootDir from VOUCH_ROOT env var: %s", RootDir)
+	} else {
+		ex, errEx := os.Executable()
+		if errEx != nil {
+			panic(errEx)
+		}
+		RootDir = filepath.Dir(ex)
+		log.Debugf("cfg.RootDir: %s", RootDir)
+	}
+	secretFile = filepath.Join(RootDir, "config/secret")
 
 	// bail if we're testing
 	if flag.Lookup("test.v") != nil {
@@ -240,19 +257,22 @@ func InitForTestPurposes() {
 func ParseConfig() {
 	log.Debug("opening config")
 
-	if os.Getenv(Branding.UCName+"_CONFIG") != "" {
-		log.Infof("config file loaded from environmental variable %s: %s", Branding.UCName+"_CONFIG", os.Getenv(Branding.UCName+"_CONFIG"))
-		viper.SetConfigFile(os.Getenv(Branding.UCName + "_CONFIG"))
+	configEnv := os.Getenv(Branding.UCName + "_CONFIG")
+
+	if configEnv != "" {
+		log.Infof("config file loaded from environmental variable %s: %s", Branding.UCName+"_CONFIG", configEnv)
+		configFile, _ := filepath.Abs(configEnv)
+		viper.SetConfigFile(configFile)
 	} else if *cmdLineConfig != "" {
 		log.Infof("config file set on commandline: %s", *cmdLineConfig)
 		viper.AddConfigPath("/")
-		viper.AddConfigPath(os.Getenv(Branding.UCName + "_ROOT"))
-		viper.AddConfigPath(os.Getenv(Branding.UCName+"_ROOT") + "config")
+		viper.AddConfigPath(RootDir)
+		viper.AddConfigPath(filepath.Join(RootDir, "config"))
 		viper.SetConfigFile(*cmdLineConfig)
 	} else {
 		viper.SetConfigName("config")
 		viper.SetConfigType("yaml")
-		viper.AddConfigPath(os.Getenv(Branding.UCName+"_ROOT") + "config")
+		viper.AddConfigPath(filepath.Join(RootDir, "config"))
 	}
 	err := viper.ReadInConfig() // Find and read the config file
 	if err != nil {             // Handle errors reading the config file
@@ -270,7 +290,7 @@ func ParseConfig() {
 		}
 
 		if len(oldConfig.Domains) != 0 {
-			log.Errorf(`						
+			log.Errorf(`
 
 IMPORTANT!
 
@@ -466,6 +486,9 @@ func SetDefaults() {
 	}
 	if !viper.IsSet(Branding.LCName + ".headers.claimheader") {
 		Cfg.Headers.ClaimHeader = "X-" + Branding.CcName + "-IdP-Claims-"
+	}
+	if !viper.IsSet(Branding.LCName + ".headers.quoteClaims") {
+		Cfg.Headers.QuoteClaims = true
 	}
 
 	// db defaults

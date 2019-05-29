@@ -11,6 +11,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -48,7 +49,7 @@ const (
 
 var (
 	// Templates
-	indexTemplate = template.Must(template.ParseFiles("./templates/index.tmpl"))
+	indexTemplate = template.Must(template.ParseFiles(filepath.Join(cfg.RootDir, "templates/index.tmpl")))
 
 	// http://www.gorillatoolkit.org/pkg/sessions
 	sessstore = sessions.NewCookieStore([]byte(cfg.Cfg.Session.Key))
@@ -213,7 +214,11 @@ func ValidateRequestHandler(w http.ResponseWriter, r *http.Request) {
 					} else if val, ok := v.([]interface{}); ok {
 						strs := make([]string, len(val))
 						for i, v := range val {
-							strs[i] = fmt.Sprintf("\"%s\"", v)
+							if cfg.Cfg.Headers.QuoteClaims {
+								strs[i] = fmt.Sprintf("\"%s\"", v)
+							} else {
+								strs[i] = fmt.Sprintf("%s", v)
+							}
 						}
 						log.Debug("Adding header for claim: ", k, " Name: ", customHeader, " Value: ", strings.Join(strs, ","))
 						w.Header().Add(customHeader, strings.Join(strs, ","))
