@@ -84,6 +84,7 @@ type Config struct {
 		Claims        []string          `mapstructure:"claims"`
 		AccessToken   string            `mapstructure:"accesstoken"`
 		IDToken       string            `mapstructure:"idtoken"`
+		QuoteClaims   bool              `mapstructure:"quoteClaims"`
 		ClaimsCleaned map[string]string // the rawClaim is mapped to the actual claims header
 	}
 	Session struct {
